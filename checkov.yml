@@ -1,0 +1,40 @@
+# Azure DevOps pipeline for Checkov scan on Terraform files
+
+trigger:
+  branches:
+    include:
+    - main
+
+stages:
+- stage: CheckovScan
+  displayName: Checkov Scan
+  jobs:
+  - job: checkov_scan
+    pool:
+      vmImage: windows-latest  # Use the Windows agent pool
+    steps:
+    - checkout: self
+
+    # Install Checkov (Note: This assumes Checkov is available for Windows, otherwise you may need an alternative tool)
+    - script: |
+        pip3 install checkov
+      displayName: 'Install checkov'
+
+    # Verify Terraform files with Checkov
+    - script: |
+        checkov --directory $(System.DefaultWorkingDirectory) -o junitxml > $(System.DefaultWorkingDirectory)/Checkov-Report.xml
+      displayName: 'Verify Terraform with Checkov'
+      name: 'checkov_check'
+
+    # Publish Checkov test results
+    - task: PublishTestResults@2
+      displayName: Publish Checkov Test Results
+      condition: succeededOrFailed()
+      inputs:
+        testResultsFormat: 'JUnit'
+        testResultsFiles: '**/*Checkov-Report.xml'
+        searchFolder: '$(System.DefaultWorkingDirectory)'
+        mergeTestResults: false
+        testRunTitle: Checkov Scan
+        failTaskOnFailedTests: false
+        publishRunAttachments: true
